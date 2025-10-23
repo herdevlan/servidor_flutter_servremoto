@@ -46,9 +46,7 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+  cors: { origin: "*" },
 });
 
 io.on("connection", (socket) => {
@@ -72,13 +70,21 @@ io.on("connection", (socket) => {
     const user = socket.data.username || "Anónimo";
     const room = socket.data.room || "General";
 
+    // Manejar tanto objeto como string
+    let messageText = "";
+    if (typeof data === "string") {
+      messageText = data;
+    } else if (typeof data === "object" && data.message) {
+      messageText = data.message;
+    }
+
     // Mostrar en consola correctamente
-    console.log(`[${room}] ${user}: ${data}`);
+    console.log(`[${room}] ${user}: ${messageText}`);
 
     // Emitir solo a los demás en la sala (el emisor no lo recibe de nuevo)
     socket.to(room).emit("stream", {
       username: user,
-      message: data,
+      message: messageText,
     });
   });
 
