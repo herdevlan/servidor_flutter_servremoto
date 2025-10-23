@@ -105,8 +105,6 @@ server.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });*/
 
-
-
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -118,7 +116,7 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-// Mapa para guardar a qué salas pertenece cada usuario
+// Mapa para guardar salas por usuario
 const userRooms = new Map(); // key: socket.id, value: Set de salas
 
 io.on("connection", (socket) => {
@@ -129,19 +127,22 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", ({ username, room }) => {
     if (!room || !username) return;
 
+    const oldRooms = userRooms.get(socket.id) || new Set();
+
+    // Avisar a las salas anteriores que salió
+    oldRooms.forEach((r) => {
+      socket.leave(r);
+      socket.to(r).emit("msg", `❌ ${socket.data.username || "Usuario"} ha salido del área`);
+    });
+
+    // Actualizar datos del usuario
     socket.join(room);
     socket.data.username = username;
-
-    const rooms = userRooms.get(socket.id) || new Set();
-    rooms.add(room);
-    userRooms.set(socket.id, rooms);
+    userRooms.set(socket.id, new Set([room]));
 
     console.log(`👤 ${username} se unió a la sala ${room}`);
 
-    // Notificación solo para este usuario
     socket.emit("msg", `Bienvenido ${username} al área ${room}`);
-
-    // Notificación solo para los demás usuarios de la misma sala
     socket.to(room).emit("msg", `👋 ${username} se unió al área`);
   });
 
@@ -157,7 +158,7 @@ io.on("connection", (socket) => {
       messageText = data.message;
     }
 
-    // Emitir a todas las salas donde está el usuario
+    // Emitir solo a la sala actual
     rooms.forEach((room) => {
       console.log(`[${room}] ${user}: ${messageText}`);
       socket.to(room).emit("stream", {
