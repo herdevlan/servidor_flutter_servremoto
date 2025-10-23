@@ -124,7 +124,7 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("🟢 Cliente conectado:", socket.id);
 
-  // Cuando alguien se une a la sala
+  // Usuario se une a una sala
   socket.on("joinRoom", ({ username, room }) => {
     socket.join(room);
     socket.data.username = username;
@@ -132,10 +132,7 @@ io.on("connection", (socket) => {
 
     console.log(`👤 ${username} se unió a la sala ${room}`);
 
-    // Solo el usuario que se une recibe el mensaje de bienvenida
     socket.emit("msg", `Bienvenido ${username} al área ${room}`);
-
-    // Los demás usuarios en la sala reciben notificación
     socket.broadcast.to(room).emit("msg", `👋 ${username} se unió al área`);
   });
 
@@ -144,7 +141,6 @@ io.on("connection", (socket) => {
     const user = socket.data.username || "Anónimo";
     const room = socket.data.room || "General";
 
-    // Manejar tanto objeto como string
     let messageText = "";
     if (typeof data === "string") {
       messageText = data;
@@ -152,27 +148,26 @@ io.on("connection", (socket) => {
       messageText = data.message;
     }
 
-    // Mostrar en consola
     console.log(`[${room}] ${user}: ${messageText}`);
 
-    // Emitir solo a los demás en la sala
     socket.to(room).emit("stream", {
       username: user,
       message: messageText,
     });
   });
 
-  // Cuando alguien se desconecta
+  // Usuario se desconecta
   socket.on("disconnect", () => {
     const user = socket.data.username || "Desconocido";
-    const room = socket.data.room;
 
-    console.log(`🔴 Cliente desconectado: ${user}`);
+    // Obtener las salas activas de este socket
+    // socket.rooms es un Set que siempre contiene al menos socket.id
+    const rooms = Array.from(socket.rooms).filter(r => r !== socket.id);
 
-    if (room) {
-      // Notificar a los demás de la sala que este usuario salió
+    rooms.forEach(room => {
+      console.log(`🔴 ${user} salió de la sala ${room}`);
       socket.to(room).emit("msg", `❌ ${user} ha salido del área`);
-    }
+    });
   });
 });
 
