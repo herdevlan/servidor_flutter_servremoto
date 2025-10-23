@@ -107,7 +107,6 @@ server.listen(PORT, () => {
 
 
 
-
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -119,16 +118,23 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
+// Mapa para guardar a qué salas pertenece cada usuario
+const userRooms = new Map(); // key: socket.id, value: Set de salas
+
 io.on("connection", (socket) => {
   console.log("🟢 Cliente conectado:", socket.id);
+  userRooms.set(socket.id, new Set());
 
   // Usuario se une a una sala
   socket.on("joinRoom", ({ username, room }) => {
-    if (!room) return;
+    if (!room || !username) return;
 
     socket.join(room);
     socket.data.username = username;
-    socket.data.room = room;
+
+    const rooms = userRooms.get(socket.id) || new Set();
+    rooms.add(room);
+    userRooms.set(socket.id, rooms);
 
     console.log(`👤 ${username} se unió a la sala ${room}`);
 
@@ -142,9 +148,7 @@ io.on("connection", (socket) => {
   // Manejo de mensajes
   socket.on("stream", (data) => {
     const user = socket.data.username || "Anónimo";
-    const room = socket.data.room;
-
-    if (!room) return; // evitar enviar mensajes si no hay sala
+    const rooms = userRooms.get(socket.id) || new Set();
 
     let messageText = "";
     if (typeof data === "string") {
@@ -153,26 +157,27 @@ io.on("connection", (socket) => {
       messageText = data.message;
     }
 
-    console.log(`[${room}] ${user}: ${messageText}`);
-
-    // Emitir solo a los demás en la misma sala
-    socket.to(room).emit("stream", {
-      username: user,
-      message: messageText,
+    // Emitir a todas las salas donde está el usuario
+    rooms.forEach((room) => {
+      console.log(`[${room}] ${user}: ${messageText}`);
+      socket.to(room).emit("stream", {
+        username: user,
+        message: messageText,
+      });
     });
   });
 
   // Usuario se desconecta
   socket.on("disconnect", () => {
     const user = socket.data.username || "Desconocido";
-    const room = socket.data.room;
+    const rooms = userRooms.get(socket.id) || new Set();
 
-    if (room) {
+    rooms.forEach((room) => {
       console.log(`🔴 ${user} salió de la sala ${room}`);
       socket.to(room).emit("msg", `❌ ${user} ha salido del área`);
-    } else {
-      console.log(`🔴 ${user} desconectado (sin sala definida)`);
-    }
+    });
+
+    userRooms.delete(socket.id);
   });
 });
 
