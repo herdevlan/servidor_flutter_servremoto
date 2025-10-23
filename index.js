@@ -108,8 +108,6 @@ server.listen(PORT, () => {
 
 
 
-
-
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -126,20 +124,27 @@ io.on("connection", (socket) => {
 
   // Usuario se une a una sala
   socket.on("joinRoom", ({ username, room }) => {
+    if (!room) return;
+
     socket.join(room);
     socket.data.username = username;
     socket.data.room = room;
 
     console.log(`👤 ${username} se unió a la sala ${room}`);
 
+    // Notificación solo para este usuario
     socket.emit("msg", `Bienvenido ${username} al área ${room}`);
-    socket.broadcast.to(room).emit("msg", `👋 ${username} se unió al área`);
+
+    // Notificación solo para los demás usuarios de la misma sala
+    socket.to(room).emit("msg", `👋 ${username} se unió al área`);
   });
 
   // Manejo de mensajes
   socket.on("stream", (data) => {
     const user = socket.data.username || "Anónimo";
-    const room = socket.data.room || "General";
+    const room = socket.data.room;
+
+    if (!room) return; // evitar enviar mensajes si no hay sala
 
     let messageText = "";
     if (typeof data === "string") {
@@ -150,6 +155,7 @@ io.on("connection", (socket) => {
 
     console.log(`[${room}] ${user}: ${messageText}`);
 
+    // Emitir solo a los demás en la misma sala
     socket.to(room).emit("stream", {
       username: user,
       message: messageText,
@@ -159,15 +165,14 @@ io.on("connection", (socket) => {
   // Usuario se desconecta
   socket.on("disconnect", () => {
     const user = socket.data.username || "Desconocido";
+    const room = socket.data.room;
 
-    // Obtener las salas activas de este socket
-    // socket.rooms es un Set que siempre contiene al menos socket.id
-    const rooms = Array.from(socket.rooms).filter(r => r !== socket.id);
-
-    rooms.forEach(room => {
+    if (room) {
       console.log(`🔴 ${user} salió de la sala ${room}`);
       socket.to(room).emit("msg", `❌ ${user} ha salido del área`);
-    });
+    } else {
+      console.log(`🔴 ${user} desconectado (sin sala definida)`);
+    }
   });
 });
 
