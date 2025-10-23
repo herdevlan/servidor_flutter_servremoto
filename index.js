@@ -38,6 +38,9 @@ server.listen(PORT, () => {
 });
 */
 
+
+
+/*
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -90,6 +93,86 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`🔴 Cliente desconectado: ${socket.data.username || socket.id}`);
+  });
+});
+
+app.get("/", (req, res) => {
+  res.send("💬 Servidor Socket.io de Chat Empresarial activo 🚀");
+});
+
+const PORT = process.env.PORT || 3003;
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});*/
+
+
+
+
+
+
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+
+const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: { origin: "*" },
+});
+
+io.on("connection", (socket) => {
+  console.log("🟢 Cliente conectado:", socket.id);
+
+  // Cuando alguien se une a la sala
+  socket.on("joinRoom", ({ username, room }) => {
+    socket.join(room);
+    socket.data.username = username;
+    socket.data.room = room;
+
+    console.log(`👤 ${username} se unió a la sala ${room}`);
+
+    // Solo el usuario que se une recibe el mensaje de bienvenida
+    socket.emit("msg", `Bienvenido ${username} al área ${room}`);
+
+    // Los demás usuarios en la sala reciben notificación
+    socket.broadcast.to(room).emit("msg", `👋 ${username} se unió al área`);
+  });
+
+  // Manejo de mensajes
+  socket.on("stream", (data) => {
+    const user = socket.data.username || "Anónimo";
+    const room = socket.data.room || "General";
+
+    // Manejar tanto objeto como string
+    let messageText = "";
+    if (typeof data === "string") {
+      messageText = data;
+    } else if (typeof data === "object" && data.message) {
+      messageText = data.message;
+    }
+
+    // Mostrar en consola
+    console.log(`[${room}] ${user}: ${messageText}`);
+
+    // Emitir solo a los demás en la sala
+    socket.to(room).emit("stream", {
+      username: user,
+      message: messageText,
+    });
+  });
+
+  // Cuando alguien se desconecta
+  socket.on("disconnect", () => {
+    const user = socket.data.username || "Desconocido";
+    const room = socket.data.room;
+
+    console.log(`🔴 Cliente desconectado: ${user}`);
+
+    if (room) {
+      // Notificar a los demás de la sala que este usuario salió
+      socket.to(room).emit("msg", `❌ ${user} ha salido del área`);
+    }
   });
 });
 
